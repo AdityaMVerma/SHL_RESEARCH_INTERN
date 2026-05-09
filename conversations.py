@@ -8,6 +8,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import PydanticOutputParser
 
+from retrieval import retrieve_assessments
+
 
 # =========================
 # LOAD ENVIRONMENT
@@ -28,7 +30,7 @@ class HiringContext(BaseModel):
     technical_skills: List[str] = []
     soft_skills: List[str] = []
 
-    assessment_types: List[str] = []
+    assessment_keys: List[str] = []
 
     remote: Optional[bool] = None
     language: Optional[str] = None
@@ -55,17 +57,34 @@ prompt = ChatPromptTemplate.from_messages([
         """
 You extract hiring requirements from recruiter conversations.
 
+The conversation may contain multiple turns.
+Accumulate hiring requirements across the entire conversation history.
+Do not discard previously mentioned requirements unless the user explicitly changes them.
+
 Extract:
 - role
 - seniority
 - technical skills
 - soft skills
+- relevant SHL assessment categories
+
+Ask question about job whether it is front end heavy or back end heavy or  a specialist roles.
+
+Possible SHL assessment categories include:
+- Knowledge & Skills
+- Personality & Behavior
+- Competencies
+- Ability & Aptitude
+- Development & 360
+- Biodata & Situational Judgment
+- Assessment Exercises
 
 Set enough_context=true ONLY if:
 - role exists
 - seniority exists
-- at least one technical skill
-- at least one soft skill
+- at least one technical skill 
+- at least one soft skill exists
+
 Return ONLY valid JSON.
 
 {format_instructions}
@@ -131,11 +150,11 @@ def get_missing_fields(context):
     if not context.seniority:
         missing.append("seniority")
 
-    if (not context.technical_skills):
-        missing.append("Technical_focus")
-    
-    if (not context.soft_skills):
-        missing.append("assessment_focus")
+    if not context.technical_skills:
+        missing.append("technical_focus")
+
+    if not context.soft_skills:
+        missing.append("behavioral_focus")
 
     return missing
 
@@ -145,15 +164,18 @@ def get_missing_fields(context):
 # =========================
 
 QUESTION_MAP = {
-    "role": "What role are you hiring for?",
 
-    "seniority": "What seniority level is the role?",
+    "role":
+        "What role are you hiring for?",
 
-    "assessment_focus":
-        "Are you looking for behavioral, personality, or aptitude assessments?",
-    
-    "Technical_focus" :
-        "Are you looking for someone with in depth knowledge and specialist in the field?"
+    "seniority":
+        "What seniority level is the role?",
+
+    "technical_focus":
+        "What technical skills or technologies should the candidate know well?",
+
+    "behavioral_focus":
+        "Are you also looking to assess communication, leadership, or personality traits?"
 }
 
 
@@ -163,14 +185,44 @@ QUESTION_MAP = {
 
 def build_retrieval_query(context):
 
-    query = f""" What test are available for the below mentioned categories
-    {context.role or ""}
-    {context.seniority or ""}
+    query = f"""
+    Role: {context.role or ""}
+
+    Seniority: {context.seniority or ""}
+
+    Technical Skills:
     {' '.join(context.technical_skills)}
+
+    Soft Skills:
     {' '.join(context.soft_skills)}
+
+    SHL Categories:
+    {' '.join(context.assessment_keys)}
     """
 
     return query.strip()
+
+
+# =========================
+# FORMAT RECOMMENDATIONS
+# =========================
+
+def format_recommendations(results):
+
+    formatted = []
+
+    for item in results:
+
+        formatted.append({
+            "name": item["name"],
+            "url": item["url"],
+            "test_type":
+                item["keys"][0]
+                if item["keys"]
+                else "Unknown"
+        })
+
+    return formatted
 
 
 # =========================
@@ -179,26 +231,56 @@ def build_retrieval_query(context):
 
 def process_conversation(messages):
 
+    # Extract accumulated context
     context = extract_context(messages)
 
+    print("\n========== CONTEXT ==========")
+    print(context)
+
+    # Determine missing info
     missing = get_missing_fields(context)
 
+    print("\n========== MISSING ==========")
+    print(missing)
+
+    # Ask clarification if needed
     if missing:
 
         reply = QUESTION_MAP[missing[0]]
 
         return {
             "reply": reply,
-            "context": context,
-            "retrieval_query": None
+            "recommendations": [],
+            "end_of_conversation": False
         }
 
+    # Build retrieval query
     retrieval_query = build_retrieval_query(context)
 
+    print("\n========== RETRIEVAL QUERY ==========")
+    print(retrieval_query)
+
+    # Retrieve assessments
+    results = retrieve_assessments(
+        retrieval_query,
+        top_k=5
+    )
+
+    print("\n========== RETRIEVAL RESULTS ==========")
+
+    for r in results:
+        print(r["name"])
+
+    # Format recommendations
+    recommendations = format_recommendations(results)
+
     return {
-        "reply": "Enough information gathered.",
-        "context": context,
-        "retrieval_query": retrieval_query
+        "reply":
+            "Here are some recommended SHL assessments based on your hiring requirements.",
+
+        "recommendations": recommendations,
+
+        "end_of_conversation": False
     }
 
 
@@ -208,11 +290,28 @@ def process_conversation(messages):
 
 messages = [
     {
-        "role": "Unknown",
-        "content": "hiring a senior full stack developer with good communication skills"
+        "role": "user",
+        "content": "Need assessments for a Java developer"
+    },
+    {
+        "role": "assistant",
+        "content": "What seniority level is the role?"
+    },
+    {
+        "role": "user",
+        "content": "Mid-level in node js and angular with stakeholder communication"
+    },
+    {
+        "role": "assistant",
+        "content": "Here are some recommendations..."
+    },
+    {
+        "role": "user",
+        "content": "Actually also add personality assessments"
     }
 ]
 
 response = process_conversation(messages)
 
+print("\n========== FINAL RESPONSE ==========")
 print(response)
