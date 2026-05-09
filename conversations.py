@@ -163,12 +163,11 @@ QUESTION_MAP = {
 
 def build_retrieval_query(context):
 
-    query = f"""
+    query = f""" What test are available for the below mentioned categories
     {context.role or ""}
     {context.seniority or ""}
     {' '.join(context.technical_skills)}
     {' '.join(context.soft_skills)}
-    {' '.join(context.assessment_types)}
     """
 
     return query.strip()

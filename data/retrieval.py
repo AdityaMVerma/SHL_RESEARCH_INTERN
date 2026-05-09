@@ -1,48 +1,109 @@
 import json
 import faiss
 import numpy as np
+
 from sentence_transformers import SentenceTransformer
 
-# Load model
-model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# Load catalog
-with open("data/shl_product_catalog_with_search.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
+# =========================
+# LOAD EMBEDDING MODEL
+# =========================
 
-# Load FAISS index
-index = faiss.read_index("data/shl_index.faiss")
+model = SentenceTransformer(
+    "sentence-transformers/all-MiniLM-L6-v2"
+)
 
 
-def search_assessments(query, top_k=5):
+# =========================
+# LOAD FAISS INDEX
+# =========================
 
-    # Embed query
+index = faiss.read_index(
+    "data/shl_index.faiss"
+)
+
+
+# =========================
+# LOAD CATALOG METADATA
+# =========================
+
+with open(
+    "data/shl_product_catalog_with_search.json",
+    "r",
+    encoding="utf-8"
+) as f:
+
+    catalog = json.load(f)
+
+
+# =========================
+# RETRIEVAL FUNCTION
+# =========================
+
+def retrieve_assessments(query, top_k=5):
+
+    # Create embedding for query
     query_embedding = model.encode([query])
 
-    query_embedding = np.array(query_embedding).astype("float32")
+    # Convert to float32 for FAISS
+    query_embedding = np.array(
+        query_embedding,
+        dtype=np.float32
+    )
 
-    # Search FAISS
-    distances, indices = index.search(query_embedding, top_k)
+    # Search FAISS index
+    distances, indices = index.search(
+        query_embedding,
+        top_k
+    )
 
+    results = []
+
+    # Retrieve matching catalog entries
     for idx in indices[0]:
+
+        # Safety check
+        if idx < 0 or idx >= len(catalog):
+            continue
 
         item = catalog[idx]
 
         results.append({
-            "name": item["name"],
-            "url": item["link"],
-            "description": item["description"],
-            "keys": item["keys"]
+            "name": item.get("name"),
+            "url": item.get("link"),
+            "description": item.get("description"),
+            "keys": item.get("keys", []),
+            "job_levels": item.get("job_levels", []),
+            "languages": item.get("languages", []),
+            "remote": item.get("remote"),
+            "adaptive": item.get("adaptive")
         })
 
     return results
 
-# Example
+
+# =========================
+# TEST
+# =========================
+
 if __name__ == "__main__":
 
-    query = "Need mid level java developer with leadership and stakeholder management assessment"
+    query = (
+        "mid-level java developer "
+        "stakeholder communication "
+        "technical and behavioral assessments"
+    )
 
-    results = search_assessments(query)
+    results = retrieve_assessments(
+        query=query,
+        top_k=5
+    )
 
-    for r in results:
-        print(r["name"])
+    print("\nTop Matches:\n")
+
+    for i, result in enumerate(results, start=1):
+
+        print(f"{i}. {result['name']}")
+        print(f"URL: {result['url']}")
+        print(f"Keys: {result['keys']}")
+        print()
