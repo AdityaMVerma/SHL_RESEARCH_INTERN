@@ -24,18 +24,23 @@ def search_assessments(query, top_k=5):
     # Search FAISS
     distances, indices = index.search(query_embedding, top_k)
 
-    results = []
-
     for idx in indices[0]:
-        results.append(data[idx])
+
+        item = catalog[idx]
+
+        results.append({
+            "name": item["name"],
+            "url": item["link"],
+            "description": item["description"],
+            "keys": item["keys"]
+        })
 
     return results
-
 
 # Example
 if __name__ == "__main__":
 
-    query = "Need leadership and stakeholder management assessment"
+    query = "Need mid level java developer with leadership and stakeholder management assessment"
 
     results = search_assessments(query)
 
