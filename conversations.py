@@ -55,10 +55,12 @@ prompt = ChatPromptTemplate.from_messages([
     (
         "system",
         """
-You extract hiring requirements from recruiter conversations.
+You are an assistant whose job is to extract hiring requirements from recruiter conversations.
 
 The conversation may contain multiple turns.
+
 Accumulate hiring requirements across the entire conversation history.
+
 Do not discard previously mentioned requirements unless the user explicitly changes them.
 
 Extract:
@@ -67,8 +69,6 @@ Extract:
 - technical skills
 - soft skills
 - relevant SHL assessment categories
-
-Ask question about job whether it is front end heavy or back end heavy or  a specialist roles.
 
 Possible SHL assessment categories include:
 - Knowledge & Skills
@@ -82,8 +82,8 @@ Possible SHL assessment categories include:
 Set enough_context=true ONLY if:
 - role exists
 - seniority exists
-- at least one technical skill 
-- at least one soft skill exists
+AND
+- at least one technical skill OR one soft skill exists
 
 Return ONLY valid JSON.
 
@@ -134,6 +134,38 @@ def extract_context(messages):
 
 
 # =========================
+# ROLE TYPE DETECTION
+# =========================
+
+def is_technical_role(role):
+
+    technical_roles = [
+        "developer",
+        "engineer",
+        "programmer",
+        "software",
+        "full stack",
+        "frontend",
+        "backend",
+        "data",
+        "analyst",
+        "scientist",
+        "architect",
+        "devops",
+        "qa",
+        "tester",
+        "technical"
+    ]
+
+    role_text = (role or "").lower()
+
+    return any(
+        keyword in role_text
+        for keyword in technical_roles
+    )
+
+
+# =========================
 # MISSING FIELD DETECTION
 # =========================
 
@@ -141,18 +173,28 @@ def get_missing_fields(context):
 
     missing = []
 
+    # Role required
     if not context.role:
         missing.append("role")
 
     if context.role == "Unknown":
         missing.append("role")
 
+    # Seniority required
     if not context.seniority:
         missing.append("seniority")
 
-    if not context.technical_skills:
-        missing.append("technical_focus")
+    # Detect technical vs non-technical role
+    technical_role = is_technical_role(
+        context.role
+    )
 
+    # Technical roles should have technical skills
+    if technical_role and not context.technical_skills:
+        missing.append("skills_focus")
+
+    # Non-technical / leadership roles
+    # should at least have soft skills
     if not context.soft_skills:
         missing.append("behavioral_focus")
 
@@ -171,7 +213,7 @@ QUESTION_MAP = {
     "seniority":
         "What seniority level is the role?",
 
-    "technical_focus":
+    "skills_focus":
         "What technical skills or technologies should the candidate know well?",
 
     "behavioral_focus":
@@ -186,9 +228,11 @@ QUESTION_MAP = {
 def build_retrieval_query(context):
 
     query = f"""
-    Role: {context.role or ""}
+    Role:
+    {context.role or ""}
 
-    Seniority: {context.seniority or ""}
+    Seniority:
+    {context.seniority or ""}
 
     Technical Skills:
     {' '.join(context.technical_skills)}
@@ -231,19 +275,28 @@ def format_recommendations(results):
 
 def process_conversation(messages):
 
-    # Extract accumulated context
+    # =====================
+    # EXTRACT CONTEXT
+    # =====================
+
     context = extract_context(messages)
 
     print("\n========== CONTEXT ==========")
     print(context)
 
-    # Determine missing info
+    # =====================
+    # FIND MISSING FIELDS
+    # =====================
+
     missing = get_missing_fields(context)
 
     print("\n========== MISSING ==========")
     print(missing)
 
-    # Ask clarification if needed
+    # =====================
+    # ASK CLARIFICATION
+    # =====================
+
     if missing:
 
         reply = QUESTION_MAP[missing[0]]
@@ -254,13 +307,21 @@ def process_conversation(messages):
             "end_of_conversation": False
         }
 
-    # Build retrieval query
-    retrieval_query = build_retrieval_query(context)
+    # =====================
+    # BUILD RETRIEVAL QUERY
+    # =====================
+
+    retrieval_query = build_retrieval_query(
+        context
+    )
 
     print("\n========== RETRIEVAL QUERY ==========")
     print(retrieval_query)
 
-    # Retrieve assessments
+    # =====================
+    # RETRIEVE ASSESSMENTS
+    # =====================
+
     results = retrieve_assessments(
         retrieval_query,
         top_k=5
@@ -271,8 +332,13 @@ def process_conversation(messages):
     for r in results:
         print(r["name"])
 
-    # Format recommendations
-    recommendations = format_recommendations(results)
+    # =====================
+    # FORMAT OUTPUT
+    # =====================
+
+    recommendations = format_recommendations(
+        results
+    )
 
     return {
         "reply":
@@ -280,7 +346,7 @@ def process_conversation(messages):
 
         "recommendations": recommendations,
 
-        "end_of_conversation": False
+        "end_of_conversation": True
     }
 
 
@@ -299,7 +365,7 @@ messages = [
     },
     {
         "role": "user",
-        "content": "Mid-level in node js and angular with stakeholder communication"
+        "content": "Mid-level in Node.js and Angular with stakeholder communication"
     },
     {
         "role": "assistant",
