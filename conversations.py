@@ -30,16 +30,16 @@ with open(
 ) as f:
 
     catalog = json.load(f)
-    TEST_TYPE_MAP = {
-    "Ability & Aptitude": "A",
-    "Biodata & Situational Judgment": "B",
-    "Biodata & Situational Judgement": "B",
-    "Competencies": "C",
-    "Development & 360": "D",
-    "Assessment Exercises": "E",
-    "Knowledge & Skills": "K",
-    "Personality & Behavior": "P",
-    "Simulations": "S"
+TEST_TYPE_MAP = {
+"Ability & Aptitude": "A",
+"Biodata & Situational Judgment": "B",
+"Biodata & Situational Judgement": "B",
+"Competencies": "C",
+"Development & 360": "D",
+"Assessment Exercises": "E",
+"Knowledge & Skills": "K",
+"Personality & Behavior": "P",
+"Simulations": "S"
 }
 
 
@@ -352,11 +352,6 @@ def build_retrieval_query(context):
 
     return query.strip()
 
-
-# =========================
-# FORMAT RECOMMENDATIONS
-# =========================
-
 # =========================
 # FORMAT RECOMMENDATIONS
 # =========================
@@ -531,19 +526,3 @@ Key categories:
         "end_of_conversation": True
     }
 
-
-# =========================
-# TEST
-# =========================
-
-messages = [
-    {
-        "role": "user",
-        "content": "Compare OPQ32r and Global Skills Assessment"
-    }
-]
-
-response = process_conversation(messages)
-
-print("\n========== FINAL RESPONSE ==========")
-print(response)
