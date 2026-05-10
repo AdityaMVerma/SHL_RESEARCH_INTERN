@@ -8,10 +8,19 @@ from sentence_transformers import SentenceTransformer
 # =========================
 # LOAD EMBEDDING MODEL
 # =========================
+model = None
 
-model = SentenceTransformer(
-    "sentence-transformers/all-MiniLM-L6-v2"
-)
+def get_model():
+
+    global model
+
+    if model is None:
+
+        model = SentenceTransformer(
+            "sentence-transformers/all-MiniLM-L6-v2"
+        )
+
+    return model
 
 
 # =========================
@@ -42,8 +51,9 @@ with open(
 
 def retrieve_assessments(query, top_k=8):
 
-    # Create embedding for query
-    query_embedding = model.encode([query])
+     # Create embedding for query
+    current_model = get_model()
+    query_embedding = current_model.encode([query])
 
     # Convert to float32 for FAISS
     query_embedding = np.array(

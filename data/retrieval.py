@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     results = retrieve_assessments(
         query=query,
-        top_k=5
+        top_k=8
     )
 
     print("\nTop Matches:\n")
